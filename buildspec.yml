@@ -1,0 +1,29 @@
+version: 0.2
+
+phases:
+  install:
+    commands:
+      - echo Installing dependencies
+      - apt-get update -o Acquire::AllowInsecureRepositories=true -o Acquire::AllowDowngradeToInsecureRepositories=true || echo 'Skipping problematic repositories'
+      - apt-get install -y docker.io
+  pre_build:
+    commands:
+      - echo Starting Docker daemon...
+      - dockerd-entrypoint.sh &
+      - timeout 15 sh -c "until docker info; do echo .; sleep 1; done"
+  build:
+    commands:
+      - echo Building the Docker image...
+      - docker build -t $ECR_URI/$REPO_NAME:latest .
+  post_build:
+    commands:
+      - echo Logging in to Amazon ECR...
+      - aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_URI
+      - echo Tagging the Docker image...
+      - docker tag $ECR_URI/$REPO_NAME:latest $ECR_URI/$REPO_NAME:latest
+      - echo Pushing the Docker image...
+      - docker push $ECR_URI/$REPO_NAME:latest
+
+artifacts:
+  files: 
+    - '**/*'
